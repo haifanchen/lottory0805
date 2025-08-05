@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>NIO Summer'25 超级抽奖</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body{margin:0;padding:20px;background:#f5f7fa;display:flex;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif}
+.card{max-width:400px;width:100%;background:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.08);overflow:hidden}
+.banner{width:100%;display:block;height:auto}
+.content{padding:25px 30px 30px}
+h2{margin-top:0;text-align:center}
+label{display:block;margin-bottom:6px;font-weight:bold}
+input{width:100%;padding:8px 10px;border:1px solid #cfd8e3;border-radius:4px;font-size:16px;box-sizing:border-box}
+button{margin-top:16px;width:100%;padding:10px 0;border:none;border-radius:4px;background:#3f51b5;color:#fff;font-size:16px;cursor:pointer}
+button:disabled{background:#c0c8e6;cursor:not-allowed}
+#result{margin-top:20px;font-size:18px;font-weight:bold;text-align:center}
+#result.success{color:#27ae60}
+#result.fail{color:#e74c3c}
+#submitBtn{background:#27ae60}
+</style>
+</head>
+<body>
+<div class="card">
+<img class="banner" src="https://i1.hdslb.com/bfs/new_dyn/0efabc104f5122d97dc24d82d88ac48c316987078.jpg@478w_270h_1s.avif" alt="NioSummer'25">
+<div class="content">
+  <h2>NIO Summer'25 超级抽奖</h2>
+  <label>请输入订单号：</label>
+  <input id="orderInput" type="text" placeholder="NIO App-我的-我的订单-购车订单-订单编号">
+  <button id="drawBtn" onclick="handleInput()">立即抽奖！</button>
+  <div id="result" style="display:none;"></div>
+  <button id="submitBtn" style="display:none;margin-top:16px" onclick="goToForm()">填写领奖信息</button>
+</div>
+</div>
+
+<script>
+const DEADLINE = new Date('2025-08-30 23:59:59');
+const FEISHU_FORM_URL = 'https://nio.feishu.cn/share/base/form/shrcn61DZYEMObb4QDUaMma813d';
+const SEED = 20250805;                        // ← 改这里即可重新洗牌
+const usedOrders = new Set(JSON.parse(localStorage.getItem('usedOrders') || '[]'));
+
+// 奖品池（带库存）
+const PRIZE_POOL = [
+  { name:'【7月冲刺享整年免费换电券】', stock:3 },
+  { name:'【蔚来悦享出行兑换券】', stock:31 },
+  { name:'【NIO SUMMER套票】', stock:30 },
+  { name:'【森泊水乐园超级套票】', stock:10 },
+  { name:'【NIO LIFE行李箱】', stock:17 },
+  { name:'【米家扫地机器人】', stock:1 },
+  { name:'【星巴克兑换券】', stock:146 },
+  { name:'【5张免费换电券】', stock:100 },
+  { name:'【蛇年ip马克杯】', stock:382 }
+];
+
+// 订单号列表（可扩展）
+const ORDER_LIST = [
+  'ORD2025001','ORD2025002','ORD2025003','ORD2025004','ORD2025005',
+  'ORD2025006','ORD2025007','ORD2025008','ORD2025009','ORD2025010'
+];
+
+// 生成奖品数组（按库存展开）
+let prizes = [];
+PRIZE_POOL.forEach(p => {
+  for (let i = 0; i < p.stock; i++) prizes.push(p.name);
+});
+
+// 伪随机洗牌（固定种子）
+function shuffle(arr, seed) {
+  let rng = seed;
+  const random = () => {
+    rng = (rng * 9301 + 49297) % 233280;
+    return rng / 233280;
+  };
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+const shuffledPrizes = shuffle([...prizes], SEED);
+
+// 订单 -> 奖品 固定映射
+const PRIZE_MAP = {};
+ORDER_LIST.forEach((ord, idx) => {
+  PRIZE_MAP[ord] = shuffledPrizes[idx];
+});
+
+function isExpired() { return Date.now() > DEADLINE.getTime(); }
+
+function handleInput() {
+  const order = document.getElementById('orderInput').value.trim();
+  const drawBtn   = document.getElementById('drawBtn');
+  const resultBox = document.getElementById('result');
+  const submitBtn = document.getElementById('submitBtn');
+
+  resultBox.style.display = 'none';
+  submitBtn.style.display = 'none';
+
+  if (!order) { showMessage('请输入订单号', false); return; }
+  if (!PRIZE_MAP[order]) { showMessage('订单号错误', false); return; }
+
+  drawBtn.style.display = 'none';
+  const prize = PRIZE_MAP[order];
+  let text = usedOrders.has(order) ? `已抽过奖：${prize}` : `恭喜获得：${prize}`;
+  showMessage(text, true);
+  submitBtn.style.display = 'block';
+
+  if (!usedOrders.has(order)) {
+    usedOrders.add(order);
+    localStorage.setItem('usedOrders', JSON.stringify([...usedOrders]));
+  }
+}
+
+function showMessage(text, success) {
+  const box = document.getElementById('result');
+  box.textContent = text;
+  box.className   = success ? 'success' : 'fail';
+  box.style.display = 'block';
+}
+
+function goToForm() {
+  window.open(FEISHU_FORM_URL, '_blank');
+}
+</script>
+</body>
+</html>
