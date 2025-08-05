@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>NIO Summer'25 超级抽奖</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body{margin:0;padding:20px;background:#f5f7fa;display:flex;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif}
+    .card{max-width:400px;width:100%;background:#fff;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.08);overflow:hidden}
+    .banner{width:100%;display:block;height:auto}
+    .content{padding:25px 30px 30px}
+    h2{margin-top:0;text-align:center}
+    label{display:block;margin-bottom:6px;font-weight:bold}
+    input{width:100%;padding:8px 10px;border:1px solid #cfd8e3;border-radius:4px;font-size:16px;box-sizing:border-box}
+    button{margin-top:16px;width:100%;padding:10px 0;border:none;border-radius:4px;background:#3f51b5;color:#fff;font-size:16px;cursor:pointer}
+    button:disabled{background:#c0c8e6;cursor:not-allowed}
+    #result{margin-top:20px;font-size:18px;font-weight:bold;text-align:center}
+    table{width:100%;margin-top:20px;border-collapse:collapse;font-size:14px}
+    th,td{padding:6px 4px;text-align:center;border-bottom:1px solid #eee}
+    th{background:#f9fafb}
+  </style>
+</head>
+<body>
+  <div class="card" id="mainCard">
+    <img class="banner" id="bannerImg" alt="NioSummer'25">
+    <div class="content" id="contentArea"></div>
+  </div>
+
+<script>
+const IMG_SRC = 'https://via.placeholder.com/400x200/3f51b5/ffffff?text=NIO+Summer';
+const FEISHU_API = 'https://lottory-rvfwptudud.cn-hangzhou.fcapp.run/api/lottery'; // 换成真实地址
+
+const DEADLINE = new Date('2025-08-30 23:59:59');
+const ADMIN_KEY = '1';
+
+const GIFT_DEFINITIONS = [
+  { name: '【7月冲刺享整年免费换电券，承包你的一年出行换电体验】', stock: 3 },
+  { name: '【全国都好用，全国都好开，助你暑期出行的蔚来悦享出行兑换券】', stock: 31 },
+  { name: '【玩转杭湖超级热门打卡点，NIO SUMMER套票】', stock: 30 },
+  { name: '【森泊水乐园超级套票】', stock: 10 },
+  { name: '【NIO LIFE行李箱】', stock: 17 },
+  { name: '【米家扫地机器人】', stock: 1 },
+  { name: '【星巴克兑换券】', stock: 146 },
+  { name: '【5张免费换电券】', stock: 100 },
+  { name: '【蛇年ip马克杯】', stock: 382 }
+];
+
+const VALID_ORDER_NUMBERS = [
+  'ORD2025001','ORD2025002','ORD2025003','ORD2025004','ORD2025005',
+  'ORD2025006','ORD2025007','ORD2025008','ORD2025009','ORD2025010'
+];
+
+const LS_USED = 'usedOrders';
+const LS_STOCK = 'giftStocks';
+
+const isExpired = () => Date.now() > DEADLINE.getTime();
+const getUsed = () => JSON.parse(localStorage.getItem(LS_USED) || '[]');
+const saveUsed = a => localStorage.setItem(LS_USED, JSON.stringify(a));
+const getStock = () => {
+  try { return JSON.parse(localStorage.getItem(LS_STOCK)) || Object.fromEntries(GIFT_DEFINITIONS.map(g => [g.name, g.stock])); }
+  catch { return Object.fromEntries(GIFT_DEFINITIONS.map(g => [g.name, g.stock])); }
+};
+const saveStock = s => localStorage.setItem(LS_STOCK, JSON.stringify(s));
+const isAdmin = () => new URLSearchParams(location.search).get('admin') === ADMIN_KEY;
+
+function renderUser() {
+  const c = document.getElementById('contentArea');
+  if (isExpired()) {
+    c.innerHTML = '<h2>活动已结束</h2><p style="text-align:center">感谢参与！</p>';
+    return;
+  }
+  c.innerHTML =      <h2>NIO Summer'25 超级抽奖</h2>     <label>请输入订单号：</label>     <input id="orderInput" placeholder="NIO App-我的订单-订单编号">     <button onclick="draw()">立即抽奖！</button>     <div id="result" style="margin-top:20px;font-weight:bold"></div>;
+}
+
+function renderAdmin() {
+  const c = document.getElementById('contentArea');
+  const rec = getUsed();
+  c.innerHTML =      <h2>中奖记录</h2>     <button onclick="location.href='.'">返回抽奖</button>     <button onclick="downCSV()" style="background:#2ecc71">下载 CSV</button>     <table>       <thead><tr><th>订单号</th><th>奖品</th><th>时间</th></tr></thead>       <tbody>         ${rec.length ? rec.map(r=><tr><td>${r.order}</td><td>${r.gift}</td><td>${new Date(r.time).toLocaleString()}</td></tr>).join('') : '<tr><td colspan="3">暂无数据</td></tr>'}       </tbody>     </table>;
+}
+
+async function draw() {
+  if (isExpired()) return;
+  const inp = document.getElementById('orderInput');
+  const order = inp.value.trim();
+  const resDiv = document.getElementById('result');
+  if (!order) { resDiv.textContent = '请输入订单号！'; return; }
+  if (!VALID_ORDER_NUMBERS.includes(order)) { resDiv.textContent = '订单号错误！'; return; }
+  const used = getUsed();
+  if (used.some(u => u.order === order)) { resDiv.textContent = '该订单号已参与过！'; return; }
+
+  const stock = getStock();
+  const avail = GIFT_DEFINITIONS.filter(g => stock[g.name] > 0);
+  if (!avail.length) { resDiv.textContent = '奖品已抽完！'; return; }
+
+  const prize = avail[Math.floor(Math.random() * avail.length)];
+  stock[prize.name]--;
+  saveStock(stock);
+  used.push({ order, gift: prize.name, time: Date.now() });
+  saveUsed(used);
+
+  // 上传到云函数（先注释掉，确认页面能渲染）
+  // try {
+  //   await fetch(FEISHU_API, {
+  //     method: 'POST',
+  //     headers: { 'Content-Type': 'application/json' },
+  //     body: JSON.stringify({ order, gift: prize.name, time: new Date().toISOString() })
+  //   });
+  // } catch(e) { console.error(e); }
+
+  resDiv.textContent = 恭喜获得：${prize.name}！;
+  inp.value = '';
+}
+
+function downCSV() {
+  const rec = getUsed();
+  if (!rec.length) return alert('暂无数据');
+  let csv = '订单号,奖品,时间\n';
+  rec.forEach(r => csv += ${r.order},"${r.gift}","${new Date(r.time).toLocaleString()}"\n);
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = '中奖记录.csv';
+  link.click();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('bannerImg').src = IMG_SRC;
+  isAdmin() ? renderAdmin() : renderUser();
+});
+</script>
+</body>
+</html>
